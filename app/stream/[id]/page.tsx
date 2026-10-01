@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, FileText } from "lucide-react";
+import { ArrowLeft, FileText, Share2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
-import { CopyableAddress } from "@/components/ui/CopyableAddress";
+import { CopyAddress } from "@/components/ui/CopyAddress";
+import { QrCodeModal } from "@/components/ui/QrCodeModal";
 import { RateTicker } from "@/components/stream/RateTicker";
 import { StreamTimeline } from "@/components/stream/StreamTimeline";
 import { StreamFlowChart } from "@/components/stream/StreamFlowChart";
@@ -69,6 +70,8 @@ export default function StreamPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<StreamStatus>("active");
+  // #688 — shareable claim-link QR modal state.
+  const [shareOpen, setShareOpen] = useState(false);
 
   // Use stream note hook — only available after streamAddress is resolved
   const noteHook = useStreamNote(streamAddress || "");
@@ -256,6 +259,14 @@ export default function StreamPage() {
     tokenByAddress(info.token, "testnet")?.symbol ??
     truncateAddress(info.token);
 
+  // #688 — direct stream claim URL for QR sharing. Built from the current
+  // origin on the client so a scanned code opens this exact stream page
+  // (claim/monitor) on the recipient's device.
+  const claimUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/stream/${id}`
+      : `/stream/${id}`;
+
   return (
     <div
       className="max-w-2xl mx-auto px-4 py-10 print-receipt"
@@ -279,12 +290,22 @@ export default function StreamPage() {
       <div className="flex items-start justify-between gap-4 mb-6">
         <div>
           <p className="text-xs text-gray-400 dark:text-gray-500 mb-1">
-            <CopyableAddress address={streamAddress} />
+            <CopyAddress address={streamAddress} />
           </p>
           <h1 className="text-2xl font-black tracking-tight">Stream #{id}</h1>
         </div>
         <div className="flex items-center gap-2">
           <Badge status={status} />
+          {/* Share stream claim link via QR code (#688) */}
+          <button
+            type="button"
+            onClick={() => setShareOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium border border-gray-300 dark:border-gray-700 text-black dark:text-white hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors print:hidden"
+            aria-label="Share stream"
+          >
+            <Share2 className="w-3.5 h-3.5" aria-hidden="true" />
+            Share
+          </button>
           {/* Add stream end date to an external calendar (#566) */}
           {info.endTime > 0 && (
             <AddToCalendarButton
@@ -408,7 +429,7 @@ export default function StreamPage() {
                 Sender
               </td>
               <td className="py-2.5 text-black dark:text-white text-right">
-                <CopyableAddress address={info.sender} />
+                <CopyAddress address={info.sender} />
               </td>
             </tr>
             <tr>
@@ -416,7 +437,7 @@ export default function StreamPage() {
                 Recipient
               </td>
               <td className="py-2.5 text-black dark:text-white text-right">
-                <CopyableAddress address={info.recipient} />
+                <CopyAddress address={info.recipient} />
               </td>
             </tr>
             <tr>
@@ -424,7 +445,7 @@ export default function StreamPage() {
                 Token
               </td>
               <td className="py-2.5 text-black dark:text-white text-right">
-                <CopyableAddress address={info.token} />
+                <CopyAddress address={info.token} />
               </td>
             </tr>
             <tr>
@@ -590,6 +611,8 @@ export default function StreamPage() {
             isSender={isSender}
             isRecipient={isRecipient}
             withdrawable={withdrawable}
+            totalDeposited={totalDeposited}
+            withdrawn={info.withdrawn}
             token={tokenSymbol}
             onSuccess={loadStream}
           />
@@ -625,6 +648,15 @@ export default function StreamPage() {
           ⚠ This stream has clawback enabled. The sender may reclaim unstreamed
           tokens at any time.
         </p>
+      )}
+
+      {/* Share stream claim-link QR modal (#688) */}
+      {shareOpen && (
+        <QrCodeModal
+          value={claimUrl}
+          title={`Share Stream #${id}`}
+          onClose={() => setShareOpen(false)}
+        />
       )}
     </div>
   );
